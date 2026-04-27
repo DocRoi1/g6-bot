@@ -14,8 +14,8 @@ const { Client, GatewayIntentBits, ActionRowBuilder, StringSelectMenuBuilder,
 // ⚠️  CONFIGUREZ CES 2 VALEURS AVANT DE DÉMARRER ⚠️
 // ══════════════════════════════════════════════════════════
 const CONFIG = {
-  TOKEN:           process.env.BOT_TOKEN     || "MTIyNTEyOTcxOTc0NjUyNzIzMg.GlETOR.2ZJsnevJlnLKEs9N-y07ECruFo1Z-rYtojdAng",
-  CHANNEL_ID:      process.env.CHANNEL_ID    || "1498184266045984881",
+  TOKEN:           process.env.BOT_TOKEN     || ${{ secrets.MTIyNTEyOTcxOTc0NjUyNzIzMg.G8nq-Q.q_UPPJlsV8oENubVvYhBGXBX23aBeyeSj4r4z8 }},
+  CHANNEL_ID:      process.env.CHANNEL_ID    || ${{ secrets.1498184266045984881 }},
   WEBAPP_URL:      process.env.WEBAPP_URL    || "https://script.google.com/macros/s/AKfycbwtA_t9Z4BEjr7oN_SegKBtwMuMQ4dGFa4jvz-UABjpkzWGLZ524GM9wWeDMHBFXakR/exec",
   MESSAGE_ID_FILE: "./message_id.txt"
 };
@@ -23,9 +23,9 @@ const CONFIG = {
 // Validation au démarrage
 function validateConfig() {
   const errors = [];
-  if (CONFIG.TOKEN === "COLLEZ_VOTRE_TOKEN_ICI" || !CONFIG.TOKEN)
+  if (CONFIG.TOKEN === ${{ secrets.MTIyNTEyOTcxOTc0NjUyNzIzMg.G8nq-Q.q_UPPJlsV8oENubVvYhBGXBX23aBeyeSj4r4z8 }}, || !CONFIG.TOKEN)
     errors.push("❌ BOT_TOKEN manquant dans CONFIG.TOKEN");
-  if (CONFIG.WEBAPP_URL === "COLLEZ_URL_WEBAPP_ICI" || !CONFIG.WEBAPP_URL)
+  if (CONFIG.WEBAPP_URL === "https://script.google.com/macros/s/AKfycbwtA_t9Z4BEjr7oN_SegKBtwMuMQ4dGFa4jvz-UABjpkzWGLZ524GM9wWeDMHBFXakR/exec" || !CONFIG.WEBAPP_URL)
     errors.push("❌ WEBAPP_URL manquant dans CONFIG.WEBAPP_URL");
   if (errors.length) {
     console.error("\n╔══════════════════════════════════════╗");
