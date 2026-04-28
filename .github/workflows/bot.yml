@@ -1,11 +1,10 @@
-name: Gruppe 6 Discord Bot
+name: Gruppe 6 Bot
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
-  workflow_dispatch:
   schedule:
-    # Redémarrage automatique toutes les 6h pour éviter les timeouts
     - cron: '0 */6 * * *'
 
 jobs:
@@ -14,16 +13,32 @@ jobs:
     timeout-minutes: 350
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install
         run: npm install
+
+      - name: Check secrets exist
+        run: |
+          if [ -z "$BOT_TOKEN" ]; then
+            echo "BOT_TOKEN: VIDE"
+          else
+            echo "BOT_TOKEN: OK (${#BOT_TOKEN} chars)"
+          fi
+          if [ -z "$WEBAPP_URL" ]; then
+            echo "WEBAPP_URL: VIDE"
+          else
+            echo "WEBAPP_URL: OK"
+          fi
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          WEBAPP_URL: ${{ secrets.WEBAPP_URL }}
 
       - name: Run bot
         env:
