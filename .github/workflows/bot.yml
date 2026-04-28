@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -24,25 +24,9 @@ jobs:
       - name: Install
         run: npm install
 
-      - name: Check secrets exist
-        run: |
-          if [ -z "$BOT_TOKEN" ]; then
-            echo "BOT_TOKEN: VIDE"
-          else
-            echo "BOT_TOKEN: OK (${#BOT_TOKEN} chars)"
-          fi
-          if [ -z "$WEBAPP_URL" ]; then
-            echo "WEBAPP_URL: VIDE"
-          else
-            echo "WEBAPP_URL: OK"
-          fi
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          WEBAPP_URL: ${{ secrets.WEBAPP_URL }}
-
-      - name: Run bot
+      - name: Run
+        run: node bot.js
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           WEBAPP_URL: ${{ secrets.WEBAPP_URL }}
           CHANNEL_ID: "1498184266045984881"
-        run: node bot.js
