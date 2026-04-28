@@ -1,224 +1,290 @@
 // ============================================================
 // BOT DISCORD — Gruppe 6 Modération
+// Version finale — Variables d'environnement uniquement
 // ============================================================
- 
-process.on('uncaughtException', (err) => {
-  console.error('ERREUR FATALE:', err.message);
-  console.error(err.stack);
-  process.exit(1);
-});
- 
-process.on('unhandledRejection', (reason) => {
-  console.error('PROMESSE REJETÉE:', reason);
-  process.exit(1);
-});
- 
-console.log("=== DÉMARRAGE BOT GRUPPE 6 ===");
-console.log("Node version:", process.version);
-console.log("BOT_TOKEN  :", process.env.BOT_TOKEN  ? "✅ présent (" + process.env.BOT_TOKEN.length + " chars)" : "❌ MANQUANT");
-console.log("WEBAPP_URL :", process.env.WEBAPP_URL ? "✅ " + process.env.WEBAPP_URL.substring(0,50) + "..." : "❌ MANQUANT");
-console.log("CHANNEL_ID :", process.env.CHANNEL_ID || "❌ MANQUANT");
- 
+
+const { Client, GatewayIntentBits, ActionRowBuilder,
+        StringSelectMenuBuilder, ButtonBuilder, ButtonStyle,
+        ModalBuilder, TextInputBuilder, TextInputStyle,
+        EmbedBuilder, Events } = require('discord.js');
+
+const fs = require('fs');
+
+// ── Configuration ────────────────────────────────────────────
 const TOKEN      = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
-const CHANNEL_ID = process.env.CHANNEL_ID || "1498184266045984881";
- 
-if (!TOKEN)      { console.error("❌ BOT_TOKEN manquant"); process.exit(1); }
-if (!WEBAPP_URL) { console.error("❌ WEBAPP_URL manquant"); process.exit(1); }
- 
-console.log("✅ Variables OK, chargement discord.js...");
- 
-const { Client, GatewayIntentBits, ActionRowBuilder, StringSelectMenuBuilder,
-        ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder,
-        TextInputStyle, EmbedBuilder, Events } = require('discord.js');
- 
-console.log("✅ discord.js chargé");
- 
-const fs = require('fs');
-const MESSAGE_ID_FILE = "./message_id.txt";
- 
-const ROLES_CONFIG = {
-  "Administrateur": { emoji: "⚡", color: 0xFF3B5C, desc: "Accès total — Gère tout" },
-  "Gestionnaire":   { emoji: "🧑‍💼", color: 0x00E5FF, desc: "Documents + Planning — Peut modifier" },
-  "Lecteur":        { emoji: "👁",  color: 0x00FF88, desc: "Lecture seule — Aucune modification" },
-  "Auditeur":       { emoji: "🔍", color: 0xFFB300, desc: "Lecture + Logs — Ne modifie rien" },
-  "Visiteur":       { emoji: "🔒", color: 0x556677, desc: "Page d'accueil uniquement" },
-  "Refuser":        { emoji: "🚫", color: 0xFF3B5C, desc: "Supprimer l'accès" }
+const CHANNEL_ID = process.env.CHANNEL_ID || '1498184266045984881';
+const ID_FILE    = './panel_id.txt';
+
+// ── Vérification au démarrage ────────────────────────────────
+console.log('[BOT] Démarrage...');
+console.log('[BOT] BOT_TOKEN  :', TOKEN      ? '✅ (' + TOKEN.length + ' chars)' : '❌ MANQUANT');
+console.log('[BOT] WEBAPP_URL :', WEBAPP_URL ? '✅ ' + WEBAPP_URL.slice(0, 60) + '...' : '❌ MANQUANT');
+console.log('[BOT] CHANNEL_ID :', CHANNEL_ID);
+
+if (!TOKEN)      { console.error('[ERREUR] BOT_TOKEN manquant'); process.exit(1); }
+if (!WEBAPP_URL) { console.error('[ERREUR] WEBAPP_URL manquant'); process.exit(1); }
+
+// ── Rôles ────────────────────────────────────────────────────
+const ROLES = {
+  Administrateur: { emoji: '⚡', color: 0xFF3B5C, desc: 'Accès total' },
+  Gestionnaire:   { emoji: '🧑‍💼', color: 0x00E5FF, desc: 'Documents + Planning' },
+  Lecteur:        { emoji: '👁',  color: 0x00FF88, desc: 'Lecture seule' },
+  Auditeur:       { emoji: '🔍', color: 0xFFB300, desc: 'Lecture + Logs' },
+  Visiteur:       { emoji: '🔒', color: 0x556677, desc: 'Accès limité' },
+  Refuser:        { emoji: '🚫', color: 0xFF3B5C, desc: 'Supprimer l\'accès' }
 };
- 
+
+// ── Client Discord ───────────────────────────────────────────
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
 });
- 
-async function callAppsScript(action, params) {
+
+// ── Appel Apps Script ────────────────────────────────────────
+async function callAPI(action, params = {}) {
   try {
-    const queryParams = new URLSearchParams({ action });
-    if (params) Object.entries(params).forEach(([k, v]) => queryParams.append(k, v));
-    const url = WEBAPP_URL + "?" + queryParams.toString();
-    console.log("→ Appel Apps Script:", action);
-    const resp = await fetch(url, { method: "GET", redirect: "follow" });
-    const text = await resp.text();
-    console.log("← Réponse:", text.substring(0, 150));
-    if (text.trim().startsWith("<")) return { error: "HTML reçu — vérifiez le déploiement Apps Script (accès: Tout le monde)" };
+    const qs  = new URLSearchParams({ action, ...params });
+    const url = WEBAPP_URL + '?' + qs.toString();
+    console.log('[API] →', action, params);
+
+    const res  = await fetch(url, { redirect: 'follow' });
+    const text = await res.text();
+    console.log('[API] ←', text.slice(0, 200));
+
+    if (text.trim().startsWith('<')) {
+      return { ok: false, error: 'HTML reçu — vérifiez le déploiement Apps Script' };
+    }
     return JSON.parse(text);
-  } catch(e) {
-    console.error("❌ Erreur Apps Script:", e.message);
-    return { error: e.message };
+  } catch (e) {
+    console.error('[API] Erreur:', e.message);
+    return { ok: false, error: e.message };
   }
 }
- 
-function buildPanelMessage() {
+
+// ── Message panel principal ──────────────────────────────────
+function buildPanel() {
   const embed = new EmbedBuilder()
-    .setTitle("🛡️ Centre de Modération — Gruppe 6")
-    .setDescription("Gérez les accès à la plateforme de gestion.\nSélectionnez une action dans le menu ci-dessous.")
+    .setTitle('🛡️ Modération — Gruppe 6')
+    .setDescription('Gérez les accès à la plateforme.\nCliquez sur un bouton ci-dessous.')
     .setColor(0xFF3B5C)
     .addFields(
-      { name: "⚡ Administrateur", value: "Accès total", inline: true },
-      { name: "🧑‍💼 Gestionnaire",  value: "Documents + Planning", inline: true },
-      { name: "👁 Lecteur",        value: "Lecture seule", inline: true },
-      { name: "🔍 Auditeur",       value: "Lecture + Logs", inline: true },
-      { name: "🔒 Visiteur",       value: "Aucun accès", inline: true },
-      { name: "🚫 Refuser",        value: "Supprimer l'accès", inline: true }
+      { name: '⚡ Administrateur', value: 'Accès total',          inline: true },
+      { name: '🧑‍💼 Gestionnaire',   value: 'Documents + Planning', inline: true },
+      { name: '👁 Lecteur',         value: 'Lecture seule',        inline: true },
+      { name: '🔍 Auditeur',        value: 'Lecture + Logs',       inline: true },
+      { name: '🔒 Visiteur',        value: 'Accès limité',         inline: true },
+      { name: '🚫 Refuser',         value: 'Supprimer l\'accès',   inline: true }
     )
-    .setFooter({ text: "Gruppe 6 — Modération • Actions loggées sur Discord" })
+    .setFooter({ text: 'Gruppe 6 • Actions loggées' })
     .setTimestamp();
- 
+
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("mod_ajouter").setLabel("Gérer un utilisateur").setEmoji("⚙️").setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId("mod_liste").setLabel("Voir les utilisateurs").setEmoji("📋").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder()
+      .setCustomId('btn_gerer')
+      .setLabel('Gérer un utilisateur')
+      .setEmoji('⚙️')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('btn_liste')
+      .setLabel('Voir les utilisateurs')
+      .setEmoji('📋')
+      .setStyle(ButtonStyle.Secondary)
   );
- 
+
   return { embeds: [embed], components: [row] };
 }
- 
-async function postOrUpdatePanel(channel) {
-  const msg = buildPanelMessage();
+
+async function envoyerPanel(channel) {
+  const msg = buildPanel();
   let savedId = null;
+
   try {
-    if (fs.existsSync(MESSAGE_ID_FILE)) savedId = fs.readFileSync(MESSAGE_ID_FILE, 'utf8').trim();
-  } catch(e) {}
- 
+    if (fs.existsSync(ID_FILE)) {
+      savedId = fs.readFileSync(ID_FILE, 'utf8').trim();
+    }
+  } catch (e) {}
+
   if (savedId) {
     try {
       const existing = await channel.messages.fetch(savedId);
       await existing.edit(msg);
-      console.log("✅ Panel mis à jour, ID:", savedId);
+      console.log('[BOT] Panel mis à jour:', savedId);
       return;
-    } catch(e) { console.log("⚠️ Ancien message introuvable, création d'un nouveau..."); }
+    } catch (e) {
+      console.log('[BOT] Ancien message introuvable, création...');
+    }
   }
- 
+
   const sent = await channel.send(msg);
-  fs.writeFileSync(MESSAGE_ID_FILE, sent.id);
-  console.log("✅ Panel créé, ID:", sent.id);
+  fs.writeFileSync(ID_FILE, sent.id);
+  console.log('[BOT] Panel créé:', sent.id);
 }
- 
-function buildEmailModal() {
+
+// ── Modal email ──────────────────────────────────────────────
+function buildModal() {
   return new ModalBuilder()
-    .setCustomId("modal_email")
-    .setTitle("Gérer un utilisateur")
+    .setCustomId('modal_email')
+    .setTitle('Gérer un utilisateur')
     .addComponents(
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId("email_input").setLabel("Adresse email").setStyle(TextInputStyle.Short).setPlaceholder("exemple@gmail.com").setRequired(true)
+        new TextInputBuilder()
+          .setCustomId('inp_email')
+          .setLabel('Adresse email')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('exemple@gmail.com')
+          .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId("nom_input").setLabel("Nom (optionnel)").setStyle(TextInputStyle.Short).setPlaceholder("Prénom Nom").setRequired(false)
+        new TextInputBuilder()
+          .setCustomId('inp_nom')
+          .setLabel('Nom (optionnel)')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('Prénom Nom')
+          .setRequired(false)
       )
     );
 }
- 
+
+// ── Menu rôles ───────────────────────────────────────────────
 function buildRoleMenu(email, nom) {
-  const options = Object.entries(ROLES_CONFIG).map(([role, cfg]) => ({
-    label: cfg.emoji + " " + role,
+  const options = Object.entries(ROLES).map(([role, cfg]) => ({
+    label: cfg.emoji + ' ' + role,
     description: cfg.desc,
-    value: role + "|" + email + "|" + (nom || "")
+    value: [role, email, nom || ''].join('|')
   }));
+
   return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder().setCustomId("select_role").setPlaceholder("Choisir le rôle…").addOptions(options)
+    new StringSelectMenuBuilder()
+      .setCustomId('menu_role')
+      .setPlaceholder('Choisir un rôle…')
+      .addOptions(options)
   );
 }
- 
+
+// ── Interactions ─────────────────────────────────────────────
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.channelId !== CHANNEL_ID) return;
- 
-  if (interaction.isButton() && interaction.customId === "mod_ajouter") {
-    await interaction.showModal(buildEmailModal());
+
+  // Bouton : Gérer
+  if (interaction.isButton() && interaction.customId === 'btn_gerer') {
+    await interaction.showModal(buildModal());
     return;
   }
- 
-  if (interaction.isButton() && interaction.customId === "mod_liste") {
+
+  // Bouton : Liste
+  if (interaction.isButton() && interaction.customId === 'btn_liste') {
     await interaction.deferReply({ ephemeral: true });
-    const result = await callAppsScript("liste", {});
-    if (result.error) { await interaction.editReply({ content: "❌ " + result.error }); return; }
-    const users = result.utilisateurs || [];
-    if (!users.length) { await interaction.editReply({ content: "Aucun utilisateur enregistré." }); return; }
-    const roleEmojis = { Administrateur:"🔴", Gestionnaire:"🔵", Lecteur:"🟢", Auditeur:"🟡", Visiteur:"⚫" };
+
+    const result = await callAPI('liste');
+    if (!result.ok || !result.utilisateurs) {
+      await interaction.editReply('❌ Erreur : ' + (result.error || 'Impossible de charger'));
+      return;
+    }
+
+    const users = result.utilisateurs;
+    if (!users.length) {
+      await interaction.editReply('Aucun utilisateur enregistré.');
+      return;
+    }
+
+    const emojis = { Administrateur:'🔴', Gestionnaire:'🔵', Lecteur:'🟢', Auditeur:'🟡', Visiteur:'⚫' };
+    const lines  = users.map(u =>
+      (emojis[u.role] || '⚪') + ' **' + (u.nom || u.email) + '**\n└ `' + u.email + '` — ' + u.role
+    ).join('\n\n');
+
     const embed = new EmbedBuilder()
-      .setTitle("📋 Utilisateurs (" + users.length + ")")
+      .setTitle('📋 Utilisateurs (' + users.length + ')')
       .setColor(0x00E5FF)
-      .setDescription(users.map(u => (roleEmojis[u.role]||"⚪") + " **" + (u.nom||u.email) + "**\n└ " + u.email + " — " + u.role).join("\n\n"))
+      .setDescription(lines)
       .setTimestamp();
+
     await interaction.editReply({ embeds: [embed] });
     return;
   }
- 
-  if (interaction.isModalSubmit() && interaction.customId === "modal_email") {
-    const email = interaction.fields.getTextInputValue("email_input").trim();
-    const nom   = interaction.fields.getTextInputValue("nom_input").trim();
-    if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
-      await interaction.reply({ content: "❌ Email invalide : " + email, ephemeral: true });
+
+  // Modal : Email saisi
+  if (interaction.isModalSubmit() && interaction.customId === 'modal_email') {
+    const email = interaction.fields.getTextInputValue('inp_email').trim();
+    const nom   = interaction.fields.getTextInputValue('inp_nom').trim();
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      await interaction.reply({ content: '❌ Email invalide : `' + email + '`', ephemeral: true });
       return;
     }
+
     const embed = new EmbedBuilder()
-      .setTitle("👤 Gestion d'accès")
+      .setTitle('👤 Attribution de rôle')
       .setColor(0xFF3B5C)
-      .setDescription("Choisissez le rôle pour **" + email + "**\nou **Refuser** pour supprimer l'accès.")
-      .addFields({ name: "📧 Email", value: email, inline: true }, { name: "👤 Nom", value: nom || "—", inline: true });
-    await interaction.reply({ embeds: [embed], components: [buildRoleMenu(email, nom)], ephemeral: true });
+      .setDescription('Choisissez le rôle pour **' + email + '**\nou **Refuser** pour supprimer son accès.')
+      .addFields(
+        { name: '📧 Email', value: '`' + email + '`', inline: true },
+        { name: '👤 Nom',   value: nom || '—',          inline: true }
+      );
+
+    await interaction.reply({
+      embeds: [embed],
+      components: [buildRoleMenu(email, nom)],
+      ephemeral: true
+    });
     return;
   }
- 
-  if (interaction.isStringSelectMenu() && interaction.customId === "select_role") {
-    const [role, email, nom] = interaction.values[0].split("|");
+
+  // Menu : Rôle sélectionné
+  if (interaction.isStringSelectMenu() && interaction.customId === 'menu_role') {
+    const [role, email, nom] = interaction.values[0].split('|');
     await interaction.deferUpdate();
-    let result;
-    if (role === "Refuser") {
-      result = await callAppsScript("refuser", { email });
-    } else {
-      result = await callAppsScript("accepter", { email, role, nom });
-    }
-    if (result.error) {
-      await interaction.editReply({ embeds: [new EmbedBuilder().setColor(0xFF3B5C).setDescription("❌ " + result.error)], components: [] });
+
+    const action = role === 'Refuser' ? 'refuser' : 'accepter';
+    const result = await callAPI(action, { email, role, nom });
+
+    if (!result.ok) {
+      await interaction.editReply({
+        embeds: [new EmbedBuilder().setColor(0xFF3B5C).setDescription('❌ ' + (result.error || 'Erreur'))],
+        components: []
+      });
       return;
     }
-    const cfg = ROLES_CONFIG[role] || {};
+
+    const cfg  = ROLES[role] || {};
+    const ok   = role !== 'Refuser';
     const embed = new EmbedBuilder()
-      .setTitle(role === "Refuser" ? "🚫 Accès supprimé" : "✅ Accès accordé")
-      .setColor(role === "Refuser" ? 0xFF3B5C : (cfg.color || 0x00FF88))
-      .setDescription("**" + email + "** → " + (role === "Refuser" ? "Accès révoqué" : (cfg.emoji||"") + " " + role))
-      .addFields({ name: "Par", value: interaction.user.tag, inline: true })
+      .setTitle(ok ? '✅ Accès accordé' : '🚫 Accès supprimé')
+      .setColor(ok ? (cfg.color || 0x00FF88) : 0xFF3B5C)
+      .setDescription('**' + email + '** → ' + (ok ? cfg.emoji + ' ' + role : 'Accès révoqué'))
+      .addFields(
+        { name: '📧 Email',    value: '`' + email + '`',        inline: true },
+        { name: '🎭 Rôle',    value: role,                       inline: true },
+        { name: '👤 Par',     value: '<@' + interaction.user.id + '>', inline: true }
+      )
       .setTimestamp();
+
     await interaction.editReply({ embeds: [embed], components: [] });
     return;
   }
 });
- 
-client.on(Events.ClientReady, async () => {
-  console.log("✅ Bot connecté :", client.user.tag);
+
+// ── Connexion ────────────────────────────────────────────────
+client.once(Events.ClientReady, async () => {
+  console.log('[BOT] Connecté :', client.user.tag);
+
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
-    if (!channel) { console.error("❌ Salon introuvable, CHANNEL_ID:", CHANNEL_ID); return; }
-    console.log("✅ Salon trouvé :", channel.name);
-    await postOrUpdatePanel(channel);
-  } catch(e) {
-    console.error("❌ Erreur:", e.message);
+    if (!channel) {
+      console.error('[BOT] Salon introuvable :', CHANNEL_ID);
+      return;
+    }
+    console.log('[BOT] Salon :', channel.name);
+    await envoyerPanel(channel);
+    console.log('[BOT] ✅ Prêt !');
+  } catch (e) {
+    console.error('[BOT] Erreur démarrage :', e.message);
   }
 });
- 
-console.log("Connexion à Discord...");
-client.login(TOKEN).catch(err => {
-  console.error("❌ Échec connexion Discord:", err.message);
-  if (err.message.includes("TOKEN_INVALID")) {
-    console.error("→ Le token est invalide. Régénérez-le sur discord.com/developers");
+
+client.login(TOKEN).catch(e => {
+  console.error('[BOT] Connexion échouée :', e.message);
+  if (e.message.includes('TOKEN_INVALID')) {
+    console.error('[BOT] → Token invalide. Régénérez-le sur discord.com/developers');
   }
   process.exit(1);
 });
