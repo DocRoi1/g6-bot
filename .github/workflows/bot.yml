@@ -25,9 +25,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run Discord Bot
+      - name: Run bot
         env:
-          BOT_TOKEN: ${{ secrets.MTIyNTEyOTcxOTc0NjUyNzIzMg.G8nq-Q.q_UPPJlsV8oENubVvYhBGXBX23aBeyeSj4r4z8 }}
-          WEBAPP_URL: ${{ secrets.https://script.google.com/macros/s/AKfycbwtA_t9Z4BEjr7oN_SegKBtwMuMQ4dGFa4jvz-UABjpkzWGLZ524GM9wWeDMHBFXakR/exec }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          WEBAPP_URL: ${{ secrets.WEBAPP_URL }}
           CHANNEL_ID: "1498184266045984881"
         run: node bot.js
